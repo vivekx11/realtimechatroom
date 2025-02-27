@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-Time Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #startScreen, #chat {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            width: 100%;
+            max-width: 700px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            position: absolute; /* Ensure only one screen is visible at a time */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #startScreen {
+            display: flex; /* Show by default */
+        }
+
+        #chat {
+            display: none; /* Hidden by default */
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            text-align: center;
+        }
+
+        /* Start Screen Styling */
+        #startScreen {
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #startScreen input {
+            width: 80%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        #startScreen input:focus {
+            border-color: #6e8efb;
+        }
+
+        #startScreen p {
+            font-size: 1.2em;
+            color: #555;
+        }
+
+        #startScreen strong#code {
+            background: #f0f0f0;
+            padding: 5px 15px;
+            border-radius: 20px;
+            color: #6e8efb;
+            font-weight: bold;
+        }
+
+        #startScreen hr {
+            width: 60%;
+            border: none;
+            height: 1px;
+            background: #ddd;
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 12px 30px;
+            background: linear-gradient(90deg, #6e8efb, #a777e3);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Chat Screen Styling */
+        #chat {
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        #messages {
+            height: 400px;
+            overflow-y: auto;
+            border-radius: 10px;
+            background: #f9f9f9;
+            padding: 15px;
+            border: 1px solid #eee;
+        }
+
+        #messages p {
+            margin: 10px 0;
+            padding: 10px 15px;
+            background: #fff;
+            border-radius: 20px;
+            max-width: 70%;
+            word-wrap: break-word;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease;
+        }
+
+        #messages p:nth-child(even) {
+            background: #6e8efb;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        #chat input {
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            font-size: 1em;
+            outline: none;
+            flex-grow: 1;
+            transition: border-color 0.3s ease;
+        }
+
+        #chat input:focus {
+            border-color: #6e8efb;
+        }
+
+        #chat form {
+            display: flex;
+            gap: 10px;
+        }
+
+        #roomCode {
+            color: #6e8efb;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Initial Screen -->
+    <div id="startScreen">
+        <h2>Real-Time Chat</h2>
+        <input type="text" id="name" placeholder="Enter name" />
+        <p>Your Code: <strong id="code"></strong></p>
+        <button onclick="startChat()">Start Live Chat</button>
+        <hr>
+        <input type="text" id="joinCode" placeholder="Enter 4-digit code" />
+        <button onclick="joinChat()">Join Chat</button>
+    </div>
+
+    <!-- Chat Screen -->
+    <div id="chat">
+        <h2>Chat Room: <span id="roomCode"></span></h2>
+        <div id="messages"></div>
+        <form onsubmit="sendMessage(); return false;">
+            <input type="text" id="message" placeholder="Type a message" />
+            <button type="submit">Send</button>
+        </form>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let userName, roomCode;
+
+        // Generate a random 4-digit code
+        function generateCode() {
+            return Math.floor(1000 + Math.random() * 9000).toString();
+        }
+
+        // Display the code on page load
+        document.getElementById('code').innerText = generateCode();
+
+        // Start chat as the creator
+        function startChat() {
+            userName = document.getElementById('name').value.trim();
+            roomCode = document.getElementById('code').innerText;
+            if (!userName) return alert('Please enter a name');
+            joinRoom(roomCode);
+        }
+
+        // Join an existing chat
+        function joinChat() {
+            userName = document.getElementById('name').value.trim();
+            roomCode = document.getElementById('joinCode').value.trim();
+            if (!userName || !roomCode || roomCode.length !== 4 || isNaN(roomCode)) {
+                return alert('Please enter a name and a valid 4-digit code');
+            }
+            joinRoom(roomCode);
+        }
+
+        // Join the room and switch screens
+        function joinRoom(code) {
+            socket.emit('joinRoom', code);
+            document.getElementById('startScreen').style.display = 'none'; // Hide start screen
+            document.getElementById('chat').style.display = 'flex'; // Show chat screen
+            document.getElementById('roomCode').innerText = code;
+        }
+
+        // Send a message
+        function sendMessage() {
+            const message = document.getElementById('message').value.trim();
+            if (message) {
+                socket.emit('chatMessage', { roomCode, name: userName, message });
+                document.getElementById('message').value = '';
+            }
+        }
+
+        // Receive and display messages
+        socket.on('message', (msg) => {
+            const messages = document.getElementById('messages');
+            messages.innerHTML += `<p>${msg}</p>`;
+            messages.scrollTop = messages.scrollHeight;
+        });
+    </script>
+</body>
+</html>
